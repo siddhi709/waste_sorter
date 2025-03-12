@@ -4,6 +4,16 @@ pipeline {
     environment {
         VENV_DIR = 'venv'  // Virtual environment directory
     }
+stage('Start Flask App') {
+    steps {
+        script {
+            sh '''
+            source venv/bin/activate
+            nohup gunicorn -w 4 -b 0.0.0.0:5000 app:app > flask.log 2>&1 &
+            '''
+        }
+    }
+}
 
     stages {
         stage('Checkout Code') {
