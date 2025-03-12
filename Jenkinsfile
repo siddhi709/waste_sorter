@@ -2,97 +2,83 @@ pipeline {
     agent any
 
     environment {
-        VENV_DIR = 'venv'  // The name of the virtual environment folder
-        CHROME_DRIVER = 'C:\\Users\\Prajakta\\Downloads\\chromedriver\\chromedriver-win64\\chromedriver.exe'  // Adjust path for ChromeDriver
-        PYTHON_PATH = '"C:\\Program Files\\Python313\\python.exe"'  // Full path to Python
+        VENV_DIR = 'venv'  // Virtual environment directory
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git credentialsId: 'github-token', url: 'https://github.com/Prajakta713/Smart-Waste-Sorter.git', branch: 'main'
+                git credentialsId: 'github-token', url: 'https://github.com/siddhi709/waste_sorter.git', branch: 'main'
             }
         }
 
         stage('Verify Python Installation') {
             steps {
-                script {
-                    bat "%PYTHON_PATH% --version"
-                }
+                sh 'python3 --version'
             }
         }
 
         stage('Set Up Virtual Environment') {
             steps {
-                script {
-                    bat '''
-                    if not exist %VENV_DIR%\\Scripts\\activate (
-                        %PYTHON_PATH% -m venv %VENV_DIR%
-                    )
-                    '''
-                }
+                sh '''
+                if [ ! -d "$VENV_DIR" ]; then
+                    python3 -m venv $VENV_DIR
+                fi
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                script {
-                    bat '''
-                    call %VENV_DIR%\\Scripts\\activate.bat && pip install -r requirements.txt
-                    '''
-                }
+                sh '''
+                source $VENV_DIR/bin/activate
+                pip install -r requirements.txt
+                deactivate
+                '''
             }
         }
 
         stage('Start Flask App') {
             steps {
-                script {
-                    // Start Flask app using `flask run`
-                    bat '''
-                    start /B python -m flask run --host=0.0.0.0 --port=5000
-                    '''
-                }
+                sh '''
+                source $VENV_DIR/bin/activate
+                nohup python3 -m flask run --host=0.0.0.0 --port=5000 > flask.log 2>&1 &
+                echo $! > flask_pid.txt
+                deactivate
+                '''
             }
         }
 
         stage('Wait for Flask to Start') {
             steps {
-                script {
-                    // Retry until Flask responds
-                    bat '''
-                    :loop
-                    curl -s http://localhost:5000 > nul
-                    if %ERRORLEVEL%==0 (
-                        echo Flask is up and running.
-                        goto done
-                    )
-                    echo Waiting for Flask to start...
-                    timeout /t 5
-                    goto loop
-                    :done
-                    '''
-                }
+                sh '''
+                until curl -s http://localhost:5000 > /dev/null; do
+                    echo "Waiting for Flask to start..."
+                    sleep 5
+                done
+                echo "Flask is up and running!"
+                '''
             }
         }
 
         stage('Run Selenium Tests') {
             steps {
-                script {
-                    bat '''
-                    call %VENV_DIR%\\Scripts\\activate.bat && pytest test_selenium.py --maxfail=1 --disable-warnings -q
-                    '''
-                }
+                sh '''
+                source $VENV_DIR/bin/activate
+                pytest test_selenium.py --maxfail=1 --disable-warnings -q
+                deactivate
+                '''
             }
         }
 
         stage('Stop Flask App') {
             steps {
-                script {
-                    // Force kill any Python processes (including Flask app)
-                    bat '''
-                    taskkill /F /IM python.exe
-                    '''
-                }
+                sh '''
+                if [ -f flask_pid.txt ]; then
+                    kill $(cat flask_pid.txt)
+                    rm flask_pid.txt
+                fi
+                '''
             }
         }
     }
@@ -102,10 +88,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo 'Build and tests passed successfully!'
+            echo '✅ Build and tests passed successfully!'
         }
         failure {
-            echo 'Build or tests failed. Please check the logs.'
+            echo '❌ Build or tests failed. Please check the logs.'
         }
     }
 }
