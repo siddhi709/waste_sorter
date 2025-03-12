@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        VENV_DIR = 'venv'  
-        PYTHON_PATH = 'python3'  
+        VENV_DIR = 'venv'
+        PYTHON_PATH = 'python3'  // Assuming Python 3 is installed
     }
 
     stages {
@@ -13,22 +13,14 @@ pipeline {
             }
         }
 
-        stage('Verify Python Installation') {
-            steps {
-                script {
-                    sh "${PYTHON_PATH} --version"
-                }
-            }
-        }
-
         stage('Set Up Virtual Environment') {
             steps {
                 script {
-                    sh """
-                    if [ ! -d "${VENV_DIR}" ]; then
-                        ${PYTHON_PATH} -m venv ${VENV_DIR}
+                    sh '''
+                    if [ ! -d "$VENV_DIR" ]; then
+                        $PYTHON_PATH -m venv $VENV_DIR
                     fi
-                    """
+                    '''
                 }
             }
         }
@@ -36,21 +28,23 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 script {
-                    sh """
-                    source ${VENV_DIR}/bin/activate
+                    sh '''
+                    source $VENV_DIR/bin/activate
                     pip install -r requirements.txt
-                    """
+                    deactivate
+                    '''
                 }
             }
         }
 
-        stage('Run Other Tests') {
+        stage('Run Tests') {
             steps {
                 script {
-                    sh """
-                    source ${VENV_DIR}/bin/activate
-                    pytest test_selenium.py --maxfail=1 --disable-warnings -q || true
-                    """
+                    sh '''
+                    source $VENV_DIR/bin/activate
+                    pytest tests/ --maxfail=1 --disable-warnings -q
+                    deactivate
+                    '''
                 }
             }
         }
@@ -61,10 +55,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo 'Build and tests (excluding Flask) passed successfully!'
+            echo 'Build and tests passed successfully!'
         }
         failure {
-            echo 'Tests failed, but Flask app was skipped.'
+            echo 'Build or tests failed. Please check the logs.'
         }
     }
 }
