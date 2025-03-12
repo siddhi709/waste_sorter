@@ -13,17 +13,24 @@ pipeline {
             }
         }
 
-        stage('Set Up Virtual Environment') {
-            steps {
-                script {
-                    sh '''
-                    if [ ! -d "$VENV_DIR" ]; then
-                        $PYTHON_PATH -m venv $VENV_DIR
-                    fi
-                    '''
-                }
-            }
+       stage('Set Up Virtual Environment') {
+    steps {
+        script {
+            sh '''
+            # Ensure Python is installed
+            if ! command -v python3 &> /dev/null; then
+                echo "Python3 not found, install it first!"
+                exit 1
+            fi
+
+            # Create virtual environment only if it doesn't exist
+            if [ ! -d "venv" ]; then
+                python3 -m venv venv || { echo "Failed to create virtual environment"; exit 1; }
+            fi
+            '''
         }
+    }
+}
 
         stage('Install Dependencies') {
             steps {
