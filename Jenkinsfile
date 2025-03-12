@@ -14,7 +14,7 @@ pipeline {
 
         stage('Verify Python Installation') {
             steps {
-                sh 'python3 --version'
+                sh "python3 --version"
             }
         }
 
@@ -32,52 +32,30 @@ pipeline {
             steps {
                 sh '''
                 source $VENV_DIR/bin/activate
+                pip install --upgrade pip
                 pip install -r requirements.txt
                 deactivate
                 '''
             }
         }
 
-        stage('Start Flask App') {
+        stage('Run Tests') {
             steps {
                 sh '''
                 source $VENV_DIR/bin/activate
-                nohup python3 -m flask run --host=0.0.0.0 --port=5000 > flask.log 2>&1 &
+                pytest tests/ --maxfail=1 --disable-warnings -q
+                deactivate
+                '''
+            }
+        }
+
+        stage('Deploy Flask App') {
+            steps {
+                sh '''
+                source $VENV_DIR/bin/activate
+                nohup gunicorn -w 4 -b 0.0.0.0:5000 app:app > flask.log 2>&1 &
                 echo $! > flask_pid.txt
                 deactivate
-                '''
-            }
-        }
-
-        stage('Wait for Flask to Start') {
-            steps {
-                sh '''
-                until curl -s http://localhost:5000 > /dev/null; do
-                    echo "Waiting for Flask to start..."
-                    sleep 5
-                done
-                echo "Flask is up and running!"
-                '''
-            }
-        }
-
-        stage('Run Selenium Tests') {
-            steps {
-                sh '''
-                source $VENV_DIR/bin/activate
-                pytest test_selenium.py --maxfail=1 --disable-warnings -q
-                deactivate
-                '''
-            }
-        }
-
-        stage('Stop Flask App') {
-            steps {
-                sh '''
-                if [ -f flask_pid.txt ]; then
-                    kill $(cat flask_pid.txt)
-                    rm flask_pid.txt
-                fi
                 '''
             }
         }
@@ -88,10 +66,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo '✅ Build and tests passed successfully!'
+            echo '✅ Build, tests, and deployment completed successfully!'
         }
         failure {
-            echo '❌ Build or tests failed. Please check the logs.'
+            echo '❌ Build or tests failed. Check the logs for details.'
         }
     }
 }
